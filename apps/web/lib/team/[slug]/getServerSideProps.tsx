@@ -67,7 +67,50 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
     currentOrgDomain,
   });
 
-  const team = null as { metadata: unknown; parent: { slug: string | null } | null; isOrganization: boolean } | null;
+  // Cal.diy: Actually query the team from the database instead of hardcoding null
+  const team = slug
+    ? await prisma.team.findFirst({
+        where: {
+          OR: [{ slug }, { metadata: { path: ["requestedSlug"], equals: slug } }],
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logoUrl: true,
+          bio: true,
+          hideBranding: true,
+          isOrganization: true,
+          metadata: true,
+          theme: true,
+          brandColor: true,
+          darkBrandColor: true,
+          parent: {
+            select: {
+              slug: true,
+              name: true,
+              isOrganization: true,
+            },
+          },
+          members: {
+            where: { accepted: true },
+            select: {
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                  bio: true,
+                  avatarUrl: true,
+                  organizationId: true,
+                },
+              },
+            },
+          },
+        },
+      })
+    : null;
 
   if (slug) {
     const redirect = await handleOrgRedirect({
@@ -86,10 +129,43 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   const metadata = teamMetadataSchema.parse(team?.metadata ?? {});
 
   // Taking care of sub-teams and orgs
+  // Cal.diy: Only block if this is an org-related request on a non-org setup
+  // Regular teams should pass through
+  if (team && !team.isOrganization) {
+    // Regular team — build the response with members
+    const members = team.members.map((m) => ({
+      id: m.user.id,
+      name: m.user.name,
+      username: m.user.username,
+      bio: m.user.bio,
+      avatarUrl: m.user.avatarUrl ?? null,
+      organizationId: m.user.organizationId,
+      safeBio: markdownToSafeHTML(m.user.bio),
+      role: m.role,
+    }));
+
+    return {
+      props: {
+        team: {
+          id: team.id,
+          name: team.name,
+          slug: team.slug,
+          logoUrl: team.logoUrl,
+          bio: team.bio,
+          hideBranding: team.hideBranding,
+          theme: team.theme,
+          brandColor: team.brandColor,
+          darkBrandColor: team.darkBrandColor,
+          members,
+        },
+      },
+    };
+  }
+
   if (
     (!isValidOrgDomain && team?.parent) ||
     (!isValidOrgDomain && !!team?.isOrganization) ||
-    !organizationsEnabled
+    (!organizationsEnabled && !team)
   ) {
     return { notFound: true } as const;
   }

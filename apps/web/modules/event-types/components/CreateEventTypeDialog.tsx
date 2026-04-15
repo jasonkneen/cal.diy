@@ -114,19 +114,21 @@ export function CreateEventTypeDialog({ profileOptions }: { profileOptions: Prof
         enableOverflow
         title={teamId ? t("add_new_team_event_type") : t("add_new_event_type")}
         description={t("new_event_type_to_book_description")}>
-        {teamId ? null : (
-          <CreateEventTypeForm
-            urlPrefix={urlPrefix}
-            isPending={createMutation.isPending}
-            form={form}
-            isManagedEventType={isManagedEventType}
-            handleSubmit={(values) => {
-              createMutation.mutate(values);
-            }}
-            SubmitButton={SubmitButton}
-            pageSlug={pageSlug}
-          />
-        )}
+        {/* Cal.diy: Render form for both personal AND team event types */}
+        <CreateEventTypeForm
+          urlPrefix={urlPrefix}
+          isPending={createMutation.isPending}
+          form={form}
+          isManagedEventType={isManagedEventType}
+          handleSubmit={(values) => {
+            createMutation.mutate({
+              ...values,
+              ...(teamId ? { teamId, schedulingType: values.schedulingType ?? SchedulingType.ROUND_ROBIN } : {}),
+            });
+          }}
+          SubmitButton={SubmitButton}
+          pageSlug={pageSlug}
+        />
       </DialogContent>
     </Dialog>
   );
