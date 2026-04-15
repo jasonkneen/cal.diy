@@ -149,8 +149,8 @@ export async function roundRobinReassignment(_args: {
   // No-op in community edition
 }
 
-// createApiKeyHandler removed (EE feature) — stub for API v2
-export async function createApiKeyHandler(_args: {
+// Cal.diy: API key creation re-implemented for community edition
+export async function createApiKeyHandler(args: {
   ctx: { user: { id: number } };
   input: {
     note?: string | null;
@@ -159,7 +159,27 @@ export async function createApiKeyHandler(_args: {
     teamId?: number;
   };
 }): Promise<string> {
-  throw new Error("API key creation is not available in community edition");
+  const { randomBytes, createHash } = await import("node:crypto");
+  const { default: prisma } = await import("@calcom/prisma");
+
+  const rawKey = `cal_${randomBytes(24).toString("hex")}`;
+  const hashedKey = createHash("sha256").update(rawKey).digest("hex");
+
+  const expiresAt = args.input.neverExpires
+    ? null
+    : args.input.expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days default
+
+  await prisma.apiKey.create({
+    data: {
+      userId: args.ctx.user.id,
+      note: args.input.note ?? null,
+      hashedKey,
+      expiresAt,
+      teamId: args.input.teamId ?? null,
+    },
+  });
+
+  return rawKey;
 }
 
 // getClientSecretFromPayment removed (EE feature) — stub for API v2

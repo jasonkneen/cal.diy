@@ -21,7 +21,8 @@ const CalVideoSettings = ({ calVideoSettings }: { calVideoSettings?: CalVideoSet
   const isPlatform = useIsPlatform();
   const [isExpanded, setIsExpanded] = useState(false);
   const [parent] = useAutoAnimate<HTMLDivElement>();
-  const hasTeamPlan = false;
+  // Cal.diy: All video features unlocked for self-hosted instances
+  const hasTeamPlan = true;
   return (
     <>
       <Tooltip content="expandable" side="right" className="lg:hidden">

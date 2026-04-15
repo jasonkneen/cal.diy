@@ -141,7 +141,8 @@ export const CreateOrEditOutOfOfficeEntryModal = ({
 
   const [profileRedirect, setProfileRedirect] = useState(!!currentlyEditingOutOfOfficeEntry?.toTeamUserId);
 
-  const hasTeamPlan = false;
+  // Cal.diy: Team features unlocked for self-hosted instances
+  const hasTeamPlan = true;
 
   const {
     handleSubmit,

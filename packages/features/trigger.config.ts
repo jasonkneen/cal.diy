@@ -16,13 +16,12 @@ export default defineConfig({
   project: process.env.TRIGGER_DEV_PROJECT_REF ?? "", // e.g., "proj_abc123"
 
   // Directories containing your tasks
+  // Cal.diy: EE billing/org trigger dirs removed (they don't exist in community edition)
   dirs: [
     "./bookings/lib/tasker/trigger/notifications",
     "./calendars/lib/tasker/trigger",
-    "./ee/billing/service/proration/tasker/trigger",
-    "./ee/organizations/lib/billing/tasker/trigger",
     "./webhooks/lib/tasker/trigger",
-  ], // Customize based on your project structure
+  ],
 
   // Retry configuration
   retries: {
