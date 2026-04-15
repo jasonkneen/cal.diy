@@ -122,8 +122,8 @@ export type { CredentialForCalendarService } from "@calcom/types/Credential";
 
 // === Stubs for deleted EE features still imported by API v2 ===
 
-// Round-robin reassignment removed (EE feature) — stubs for API v2
-export async function roundRobinManualReassignment(_args: {
+// Cal.diy: Round-robin manual reassignment re-implemented
+export async function roundRobinManualReassignment(args: {
   bookingId: number;
   newUserId: number;
   orgId?: number | null;
@@ -134,10 +134,33 @@ export async function roundRobinManualReassignment(_args: {
   actionSource?: string;
   reassignedByUuid?: string;
 }): Promise<void> {
-  // No-op in community edition
+  const { default: prisma } = await import("@calcom/prisma");
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: args.bookingId },
+    select: { id: true, userId: true, eventTypeId: true },
+  });
+
+  if (!booking) throw new Error(`Booking ${args.bookingId} not found`);
+
+  // Reassign the booking to the new user
+  await prisma.booking.update({
+    where: { id: args.bookingId },
+    data: { userId: args.newUserId },
+  });
+
+  // Update the host assignment
+  await prisma.host.updateMany({
+    where: {
+      userId: booking.userId ?? undefined,
+      eventTypeId: booking.eventTypeId ?? undefined,
+    },
+    data: { userId: args.newUserId },
+  });
 }
 
-export async function roundRobinReassignment(_args: {
+// Cal.diy: Round-robin automatic reassignment re-implemented
+export async function roundRobinReassignment(args: {
   bookingId: number;
   orgId?: number | null;
   emailsEnabled?: boolean;
@@ -146,7 +169,64 @@ export async function roundRobinReassignment(_args: {
   actionSource?: string;
   reassignedByUuid?: string;
 }): Promise<void> {
-  // No-op in community edition
+  const { default: prisma } = await import("@calcom/prisma");
+  const { getLuckyUserService } = await import("@calcom/features/di/containers/LuckyUser");
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: args.bookingId },
+    select: {
+      id: true,
+      userId: true,
+      eventTypeId: true,
+      startTime: true,
+      eventType: {
+        select: {
+          id: true,
+          hosts: {
+            select: {
+              userId: true,
+              isFixed: true,
+              priority: true,
+              weight: true,
+              user: {
+                select: { id: true, email: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!booking?.eventType) throw new Error(`Booking ${args.bookingId} not found or has no event type`);
+
+  // Get non-fixed hosts (RR candidates), excluding current assignee
+  const candidates = booking.eventType.hosts
+    .filter((h) => !h.isFixed && h.userId !== booking.userId)
+    .map((h) => ({
+      id: h.userId,
+      email: h.user.email,
+      priority: h.priority ?? 2,
+      weight: h.weight ?? 100,
+    }));
+
+  if (candidates.length === 0) throw new Error("No available round-robin hosts for reassignment");
+
+  // Use the lucky user service to pick the next host
+  const luckyUserService = getLuckyUserService();
+  const luckyUser = await luckyUserService.getLuckyUser({
+    availableUsers: candidates.map((c) => ({
+      ...c,
+      isFixed: false,
+    })),
+    eventTypeId: booking.eventType.id,
+  });
+
+  // Reassign to the lucky user
+  await prisma.booking.update({
+    where: { id: args.bookingId },
+    data: { userId: luckyUser.id },
+  });
 }
 
 // Cal.diy: API key creation re-implemented for community edition
