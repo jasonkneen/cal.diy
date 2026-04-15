@@ -93,6 +93,18 @@ const getTabs = (
       ],
     },
     {
+      name: "workflows",
+      href: "/settings/workflows",
+      icon: "zap",
+      children: [
+        {
+          name: "workflows",
+          href: "/settings/workflows",
+          trackingMetadata: { section: "workflows", page: "workflows_list" },
+        },
+      ],
+    },
+    {
       name: "security",
       href: "/settings/security",
       icon: "key",

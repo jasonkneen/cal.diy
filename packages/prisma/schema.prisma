@@ -182,6 +182,7 @@ model EventType {
   hashedLink                         HashedLink[]
   bookings                           Booking[]
   availability                       Availability[]
+  workflows                          WorkflowsOnEventTypes[]
   webhooks                           Webhook[]
   destinationCalendar                DestinationCalendar?
   useEventLevelSelectedCalendars     Boolean                @default(false)
@@ -425,6 +426,7 @@ model User {
   teams               Membership[]
   bookings            Booking[]
   schedules           Schedule[]
+  workflows           Workflow[]
   defaultScheduleId   Int?
   selectedCalendars   SelectedCalendar[]
   completedOnboarding Boolean              @default(false)
@@ -590,6 +592,7 @@ model Team {
   orgUsers               User[]                  @relation("scope")
   inviteTokens           VerificationToken[]
   webhooks               Webhook[]
+  workflows              Workflow[]
   timeFormat             Int?
   timeZone               String                  @default("Europe/London")
   weekStart              String                  @default("Sunday")
@@ -859,6 +862,7 @@ model Booking {
   /// @zod.import(["import { emailSchema } from '../../zod-utils'"]).custom.use(emailSchema)
   userPrimaryEmail       String?
   references             BookingReference[]
+  workflowReminders      WorkflowReminder[]
   eventType              EventType?                 @relation(fields: [eventTypeId], references: [id])
   eventTypeId            Int?
   title                  String
@@ -2849,4 +2853,107 @@ model AttributeSyncFieldMapping {
 
   @@unique([integrationAttributeSyncId, attributeId])
   @@index([integrationAttributeSyncId])
+}
+
+// ─── Cal.diy: Workflow Models (restored) ───────────────────────────────
+
+enum WorkflowTriggerEvents {
+  BEFORE_EVENT
+  EVENT_CANCELLED
+  NEW_EVENT
+  AFTER_EVENT
+  RESCHEDULE_EVENT
+}
+
+enum WorkflowActions {
+  EMAIL_HOST
+  EMAIL_ATTENDEE
+  SMS_ATTENDEE
+  SMS_NUMBER
+  EMAIL_ADDRESS
+  WHATSAPP_ATTENDEE
+  WHATSAPP_NUMBER
+}
+
+enum WorkflowTemplates {
+  REMINDER
+  CUSTOM
+  CANCELLED
+  RESCHEDULED
+  COMPLETED
+}
+
+enum WorkflowMethods {
+  EMAIL
+  SMS
+}
+
+model Workflow {
+  id         Int                    @id @default(autoincrement())
+  name       String
+  userId     Int?
+  user       User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId     Int?
+  team       Team?                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  activeOn   WorkflowsOnEventTypes[]
+  trigger    WorkflowTriggerEvents
+  time       Int?
+  timeUnit   TimeUnit?
+  steps      WorkflowStep[]
+  isActiveOnAll Boolean             @default(false)
+
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  @@index([userId])
+  @@index([teamId])
+}
+
+model WorkflowStep {
+  id                Int               @id @default(autoincrement())
+  stepNumber        Int
+  action            WorkflowActions
+  workflowId        Int
+  workflow          Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sendTo            String?
+  reminderBody      String?
+  emailSubject      String?
+  template          WorkflowTemplates  @default(CUSTOM)
+  numberRequired    Boolean?
+  sender            String?
+  numberVerificationPending Boolean    @default(false)
+  includeCalendarEvent Boolean         @default(false)
+  workflowReminders WorkflowReminder[]
+
+  @@index([workflowId])
+}
+
+model WorkflowReminder {
+  id              Int            @id @default(autoincrement())
+  bookingUid      String?
+  booking         Booking?       @relation(fields: [bookingUid], references: [uid], onDelete: Cascade)
+  method          WorkflowMethods
+  workflowStepId  Int?
+  workflowStep    WorkflowStep?  @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+  referenceId     String?        @unique
+  scheduledDate   DateTime?
+  scheduled       Boolean
+  cancelled       Boolean?
+  isMandatoryReminder Boolean?   @default(false)
+  seatReferenceId String?
+
+  @@index([bookingUid])
+  @@index([workflowStepId])
+}
+
+model WorkflowsOnEventTypes {
+  id          Int       @id @default(autoincrement())
+  workflowId  Int
+  eventTypeId Int
+  workflow    Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, eventTypeId])
+  @@index([workflowId])
+  @@index([eventTypeId])
 }
