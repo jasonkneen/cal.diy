@@ -1,39 +1,129 @@
-> [!WARNING]  
-> Use at your own risk. Cal.diy is the open source community edition of Cal.com and it is intended for users who want to self-host their own Cal.diy instance. It is strictly recommended for personal, non-production use. Please review all installation and configuration steps carefully. Self-hosting requires advanced knowledge of server administration, database management, and securing sensitive data. Proceed only if you are comfortable with these responsibilities.
-
-> [!TIP]
-> For any commercial and enterprise-ready scheduling infrastructure, use Cal.com, not Cal.diy; hosted by us or get invited to on-prem enterprise access here: <a href="https://cal.com/sales">https://cal.com/sales</a>
+> [!NOTE]
+> This is a **community-enhanced fork** of [Cal.diy](https://github.com/calcom/cal.diy) that restores features stripped from the open-source edition and adds one-click deployment. Production-ready. Self-hosted. No restrictions.
 
 <!-- PROJECT LOGO -->
 <p align="center">
-  <a href="https://github.com/calcom/cal.diy">
+  <a href="https://github.com/jasonkneen/cal.diy">
    <img src="https://user-images.githubusercontent.com/8019099/210054112-5955e812-a76e-4160-9ddd-58f2c72f1cce.png" alt="Logo">
   </a>
 
-  <h3 align="center">Cal.diy</h3>
+  <h3 align="center">Cal.diy (Enhanced)</h3>
 
   <p align="center">
-    The community-driven, open-source scheduling platform.
+    The community-driven, open-source scheduling platform. <strong>Now with Teams, one-click deploy, and unlocked features.</strong>
     <br />
-    <a href="https://github.com/calcom/cal.diy"><strong>GitHub</strong></a>
+    <a href="https://github.com/jasonkneen/cal.diy"><strong>GitHub</strong></a>
     <br />
     <br />
-    <a href="https://github.com/calcom/cal.diy/discussions">Discussions</a>
+    <a href="#-quick-start">Quick Start</a>
     &middot;
-    <a href="https://github.com/calcom/cal.diy/issues">Issues</a>
+    <a href="#-feature-parity-tracker">Feature Parity</a>
     &middot;
-    <a href="./CONTRIBUTING.md">Contributing</a>
+    <a href="#-whats-different-in-this-fork">What's Different</a>
+    &middot;
+    <a href="https://github.com/jasonkneen/cal.diy/issues">Issues</a>
   </p>
 </p>
 
 <p align="center">
-   <a href="https://github.com/calcom/cal.diy/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple" alt="License"></a>
-   <a href="https://github.com/calcom/cal.diy/stargazers"><img src="https://img.shields.io/github/stars/calcom/cal.diy" alt="Github Stars"></a>
-   <a href="https://github.com/calcom/cal.diy/pulse"><img src="https://img.shields.io/github/commit-activity/m/calcom/cal.diy" alt="Commits-per-month"></a>
-   <a href="https://hub.docker.com/r/calcom/cal.diy"><img src="https://img.shields.io/docker/pulls/calcom/cal.diy" alt="Docker Pulls"></a>
-   <a href="https://github.com/calcom/cal.diy/issues?q=is:issue+is:open+label:%22%F0%9F%99%8B%F0%9F%8F%BB%E2%80%8D%E2%99%82%EF%B8%8Fhelp+wanted%22"><img src="https://img.shields.io/badge/Help%20Wanted-Contribute-blue"></a>
-   <a href="https://contributor-covenant.org/version/1/4/code-of-conduct/"><img src="https://img.shields.io/badge/Contributor%20Covenant-1.4-purple" /></a>
+   <a href="https://github.com/jasonkneen/cal.diy/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple" alt="License"></a>
+   <a href="https://github.com/jasonkneen/cal.diy/stargazers"><img src="https://img.shields.io/github/stars/jasonkneen/cal.diy" alt="Github Stars"></a>
+   <a href="https://github.com/jasonkneen/cal.diy/pulse"><img src="https://img.shields.io/github/commit-activity/m/jasonkneen/cal.diy" alt="Commits-per-month"></a>
 </p>
+
+---
+
+## 🚀 Quick Start
+
+Deploy a full scheduling platform in 90 seconds:
+
+```bash
+git clone https://github.com/jasonkneen/cal.diy.git && cd cal.diy
+./deploy.sh
+```
+
+That's it. Open http://localhost:3000, create your account, connect your calendar.
+
+**Interactive mode** (configure domain, email, SMTP):
+```bash
+./deploy.sh -i
+```
+
+**Other commands:**
+```bash
+./deploy.sh --status    # Check service health
+./deploy.sh --update    # Pull latest + restart
+./deploy.sh --destroy   # Nuclear option
+```
+
+> Requires Docker & Docker Compose. The script auto-generates secrets, starts Postgres + Redis + Web + API, runs migrations, and waits for health checks.
+
+---
+
+## 🔄 What's Different in This Fork
+
+Cal.com [went closed source](https://cal.com/blog) in April 2026, deleting ~400,000 lines from the open-source edition and calling it "for hobbyists only." This fork fights back.
+
+### Restored & Unlocked Features
+
+| Feature | Upstream Status | This Fork |
+|---------|:-:|:-:|
+| Cal Video recording/transcription | 🔒 Hardcoded off | ✅ Unlocked |
+| Out of Office team redirect | 🔒 Hardcoded off | ✅ Unlocked |
+| API key creation | ❌ Throws error | ✅ Implemented |
+| Round-robin reassignment | ❌ No-op stub | ✅ Implemented |
+| Teams (create, manage, invite) | ❌ Completely removed | ✅ Rebuilt |
+| Team settings UI | ❌ Deleted | ✅ Rebuilt |
+| Settings sidebar "Teams" section | ❌ Missing | ✅ Added |
+| Stale /ee/ trigger references | ⚠️ Broken | ✅ Fixed |
+| One-click Docker deployment | ❌ Manual 15+ steps | ✅ `./deploy.sh` |
+| Pre-built multi-arch Docker images | ❌ Build from source only | ✅ GitHub Actions CI |
+| Automated cal.com monitoring | ❌ N/A | ✅ Blog + pricing scraper |
+
+### What Upstream Already Had (still works)
+
+- ✅ Full scheduling engine (event types, slots, availability, booking lifecycle)
+- ✅ 100+ integrations (10 calendars, 20+ video, 6 CRM, 4 payment, 8 AI voice)
+- ✅ API v2 (NestJS), Webhooks (21 triggers), Embeds
+- ✅ Payments (Stripe, PayPal, HitPay, BTCPay)
+- ✅ Bot detection (Turnstile), Feature flags, i18n, Push notifications
+- ✅ Form builder, Out of Office, URL shortener
+
+---
+
+## 📊 Feature Parity Tracker
+
+**Current parity: ~60%** (of cal.com cloud features)
+
+| Feature | Status | Notes |
+|---------|:------:|-------|
+| **Core scheduling** | ✅ Done | Event types, slots, availability, bookings |
+| **Calendar sync** | ✅ Done | Google, Apple, CalDAV, Exchange, O365, Zoho, ICS, Lark, Feishu |
+| **Video conferencing** | ✅ Done | Daily, Zoom, Meet, Teams, Jitsi + 15 more |
+| **App store (100+)** | ✅ Done | CRM, payment, analytics, AI voice, automation |
+| **Payments** | ✅ Done | Stripe, PayPal, HitPay, BTCPay |
+| **API v2** | ✅ Done | Full NestJS REST API |
+| **Webhooks** | ✅ Done | 21 trigger events |
+| **Embeds** | ✅ Done | Inline, popup, floating button |
+| **Teams — CRUD & management** | ✅ Done | Create, invite, roles, member management |
+| **Teams — Round-robin** | ✅ Done | Automatic + manual reassignment |
+| **Cal Video advanced settings** | ✅ Done | Recording, transcription unlocked |
+| **API key management** | ✅ Done | Create, list, delete |
+| **One-click deployment** | ✅ Done | `./deploy.sh` with auto-config |
+| **Team event types** | 🔧 In Progress | Collective, managed scheduling |
+| **Routing forms** | 📋 Planned | Dynamic question → route to member |
+| **Workflows / Automations** | 📋 Planned | Trigger → condition → action engine |
+| **Insights / Analytics** | 📋 Planned | Booking analytics dashboard |
+| **Organizations / Multi-tenant** | 📋 Planned | Org-level settings, sub-teams |
+| **SSO / SAML** | 📋 Planned | Enterprise identity providers |
+| **Instant booking** | 📋 Planned | Skip confirmation for trusted contacts |
+| **AI Phone agent** | 📋 Planned | Voice AI scheduling |
+| **Booking audit trail** | 📋 Planned | Full audit logging |
+| **PBAC (permissions)** | 📋 Planned | Role-based access control |
+
+> See [CAL-DIY-PARITY-REPORT.md](./CAL-DIY-PARITY-REPORT.md) for the full gap analysis, implementation timeline, and architecture details.
+
+---
 
 <!-- ABOUT THE PROJECT -->
 
@@ -41,18 +131,11 @@
 
 <img width="100%" alt="booking-screen" src="https://github.com/calcom/cal.diy/assets/8019099/407e727e-ff19-4ca4-bcae-049dca05cf02">
 
-**Cal.diy** is the community-driven, fully open-source scheduling platform — a fork of [Cal.com](https://cal.com) with all enterprise/commercial code removed.
+**Cal.diy (Enhanced)** is a community-driven fork of [Cal.diy](https://github.com/calcom/cal.diy) that restores deleted features, unlocks gated functionality, and adds production-ready deployment tooling.
 
-Cal.diy is **100% MIT-licensed** with no proprietary "Enterprise Edition" features. It's designed for individuals and self-hosters who want full control over their scheduling infrastructure without any commercial dependencies.
+The upstream Cal.diy was created when Cal.com went closed source in April 2026, stripping ~400K lines of code and labelling the open-source version as "hobbyist only." This fork proves that claim wrong by systematically rebuilding the missing pieces and making deployment trivial.
 
-### What's different from Cal.com?
-
-- **No enterprise features** — Teams, Organizations, Insights, Workflows, SSO/SAML, and other EE-only features have been removed
-- **No license key required** — Everything works out of the box, no Cal.com account or license needed
-- **100% open source** — The entire codebase is licensed under MIT, no "Open Core" split
-- **Community-maintained** — Contributions are welcome and go directly into this project (see [CONTRIBUTING.md](./CONTRIBUTING.md))
-
-> **Note:** Cal.diy is a self-hosted project. There is no hosted/managed version. You run it on your own infrastructure.
+**Cal.diy is 100% MIT-licensed** with no proprietary code, no license keys, no "Enterprise Edition" gating, and no telemetry by default.
 
 ### Built With
 
