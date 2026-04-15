@@ -152,13 +152,13 @@ See detailed plan in Part 4 below.
 
 ---
 
-## PART 3: AGENT-S CONTINUOUS MONITORING PLAN
+## PART 3: CONTINUOUS MONITORING PLAN
 
 ### Architecture: Automated Feature Parity Monitoring
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   AGENT-S MONITOR                    │
+│              CAL.COM MONITORING SYSTEM                │
 │                                                      │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
 │  │ Blog     │  │ Platform │  │ Feature Matrix   │  │
@@ -456,10 +456,10 @@ WEEK  2  │──────── Phase 5: Deployment (parallel)
 WEEK  3  │          - Helm chart, cloud deploy buttons
 WEEK  4  ┘          - Wizard, documentation
 
-WEEK  2  ┐──────── Agent-S Setup (parallel)
+WEEK  2  ┐──────── cal.com monitoring Setup (parallel)
 WEEK  3  ┘          - Blog monitor, platform tester, cron jobs
 
-ONGOING  ────────── Agent-S runs weekly/monthly
+ONGOING  ────────── cal.com monitoring runs weekly/monthly
                      - Detects new Cal.com features
                      - Creates backlog issues
                      - Maintains parity
@@ -471,7 +471,7 @@ ONGOING  ────────── Agent-S runs weekly/monthly
 |------|-------|----------|
 | Full-stack dev (Next.js/TypeScript) | 2 | 12 weeks |
 | DevOps / Infrastructure | 1 | 4 weeks (part-time after) |
-| Agent-S setup & maintenance | 1 | 2 weeks (then automated) |
+| cal.com monitoring setup & maintenance | 1 | 2 weeks (then automated) |
 
 **Total: ~3 developers, 12 weeks to full parity.**
 **With aggressive AI-assisted coding: 1-2 developers, 8-10 weeks.**
@@ -543,7 +543,7 @@ Action:
    - Multi-arch builds (amd64 + arm64)
    - Push to GHCR
 
-4. **Set up Agent-S blog monitor cron job**
+4. **Set up cal.com monitoring blog monitor cron job**
 
 ### This Week
 

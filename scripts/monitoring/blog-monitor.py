@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cal.diy Agent-S: Blog Monitor
+Cal.diy: Cal.com Blog Monitor
 Scrapes cal.com/blog for new posts and detects feature announcements.
 Outputs a markdown report of new/relevant posts.
 """
@@ -117,7 +117,7 @@ def score_post(title: str, description: str = "") -> tuple[int, list[str]]:
 
 
 def main():
-    print("# Cal.diy Agent-S: Blog Monitor Report")
+    print("# Cal.diy: Cal.com Blog Monitor Report")
     print(f"# Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     print()
 

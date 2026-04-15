@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cal.diy Agent-S: Feature Matrix Diff
+Cal.diy: Feature Matrix Diff
 Scrapes cal.com/pricing and compares against our tracked feature matrix.
 Outputs a diff report showing new features, changed tiers, and parity score.
 """
@@ -103,7 +103,7 @@ def extract_features_from_html(html: str) -> dict:
 
 
 def main():
-    print("# Cal.diy Agent-S: Feature Matrix Diff Report")
+    print("# Cal.diy: Feature Matrix Diff Report")
     print(f"# Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
     print()
 
