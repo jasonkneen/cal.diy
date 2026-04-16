@@ -93,8 +93,25 @@ export class RoutingFormRepository {
     try {
       return await query();
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "42P01") {
-        throw new Error(ROUTING_FORMS_TABLES_MISSING_ERROR);
+      // Prisma wraps raw-query failures as P2010 with the underlying Postgres
+      // SQLSTATE 42P01 (undefined_table). Depending on the prisma version the
+      // SQLSTATE lives in different places on error.meta — check all.
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        const meta = error.meta as
+          | {
+              code?: string;
+              driverAdapterError?: { cause?: { originalCode?: string; kind?: string } };
+            }
+          | undefined;
+        const cause = meta?.driverAdapterError?.cause;
+        if (
+          error.code === "42P01" ||
+          meta?.code === "42P01" ||
+          cause?.originalCode === "42P01" ||
+          cause?.kind === "TableDoesNotExist"
+        ) {
+          throw new Error(ROUTING_FORMS_TABLES_MISSING_ERROR);
+        }
       }
       throw error;
     }
@@ -417,11 +434,14 @@ export class RoutingFormRepository {
       actions: RoutingFormRepository.normalizeActions(data.actions),
       rules: RoutingFormRepository.normalizeRules(data.rules ?? []),
     };
+    const id = crypto.randomUUID();
+    const fieldsJson = JSON.stringify(data.fields ?? []);
+    const routesJson = JSON.stringify(payload);
 
     const created = await RoutingFormRepository.executeQuery(() =>
       prisma.$queryRaw<RoutingFormRow[]>(Prisma.sql`
-        INSERT INTO "App_RoutingForms_Form" (name, description, "userId", fields, routes)
-        VALUES (${data.name}, ${data.description ?? null}, ${userId}, ${data.fields}, ${payload})
+        INSERT INTO "App_RoutingForms_Form" (id, name, description, "userId", fields, routes)
+        VALUES (${id}, ${data.name}, ${data.description ?? null}, ${userId}, ${fieldsJson}::jsonb, ${routesJson}::jsonb)
         RETURNING id, name, description, "fields", routes, "createdAt", "updatedAt"
       `)
     );
@@ -452,14 +472,17 @@ export class RoutingFormRepository {
       actions,
       rules,
     };
+    const fieldsJson = JSON.stringify(fields);
+    const routesJson = JSON.stringify(payload);
 
     const updated = await RoutingFormRepository.executeQuery(() =>
       prisma.$queryRaw<RoutingFormRow[]>(Prisma.sql`
         UPDATE "App_RoutingForms_Form"
         SET name = ${data.name ?? currentForm.name},
             description = ${data.description ?? currentForm.description ?? null},
-            fields = ${fields},
-            routes = ${payload}
+            fields = ${fieldsJson}::jsonb,
+            routes = ${routesJson}::jsonb,
+            "updatedAt" = CURRENT_TIMESTAMP
         WHERE id = ${id}
           AND "userId" = ${userId}
         RETURNING id, name, description, "fields", routes, "createdAt", "updatedAt"
@@ -499,10 +522,11 @@ export class RoutingFormRepository {
     // would block a user from submitting the same form twice. Use a per-submission UUID
     // and persist the userId separately via response payload if attribution is needed.
     const formFillerId = crypto.randomUUID();
+    const responseJson = JSON.stringify(responses);
     const [inserted] = await RoutingFormRepository.executeQuery(() =>
       prisma.$queryRaw<RoutingFormResponseRow[]>(Prisma.sql`
         INSERT INTO "App_RoutingForms_FormResponse" ("formId", response, "formFillerId")
-        VALUES (${formId}, ${responses}, ${formFillerId})
+        VALUES (${formId}, ${responseJson}::jsonb, ${formFillerId})
         RETURNING id, "formId", response, "formFillerId", "createdAt", "updatedAt"
       `)
     );
