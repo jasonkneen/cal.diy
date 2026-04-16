@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { trpc } from "@calcom/trpc/react";
 import { Button } from "@calcom/ui/components/button";
-import { Meta } from "@calcom/ui/components/meta";
 import { TextField } from "@calcom/ui/components/form";
+import SettingsHeader from "@calcom/features/settings/appDir/SettingsHeader";
 import { TextAreaField } from "@calcom/ui/components/form";
 import { showToast } from "@calcom/ui/components/toast";
 
@@ -39,9 +39,7 @@ export default function CreateTeamPage() {
   });
 
   return (
-    <>
-      <Meta title="Create a Team" description="Set up a new team for collaborative scheduling." />
-
+    <SettingsHeader title="Create a Team" description="Set up a new team for collaborative scheduling.">
       <div className="bg-default border-subtle mx-auto max-w-lg rounded-lg border p-6">
         <h2 className="text-emphasis mb-6 text-xl font-semibold">Create a new team</h2>
 
@@ -97,6 +95,6 @@ export default function CreateTeamPage() {
           </div>
         </form>
       </div>
-    </>
+    </SettingsHeader>
   );
 }

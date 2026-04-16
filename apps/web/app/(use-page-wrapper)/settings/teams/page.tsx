@@ -8,8 +8,8 @@ import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { trpc } from "@calcom/trpc/react";
 import { Button } from "@calcom/ui/components/button";
 import { Icon } from "@calcom/ui/components/icon";
-import { Meta } from "@calcom/ui/components/meta";
 import { Avatar } from "@calcom/ui/components/avatar";
+import SettingsHeader from "@calcom/features/settings/appDir/SettingsHeader";
 import { Badge } from "@calcom/ui/components/badge";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
 import { showToast } from "@calcom/ui/components/toast";
@@ -47,17 +47,14 @@ export default function TeamsSettingsPage() {
   }
 
   return (
-    <>
-      <Meta
-        title="Teams"
-        description="Create and manage teams to collaborate on scheduling."
-        CTA={
-          <Button href="/settings/teams/new" StartIcon="plus" color="primary">
-            {t("new_team")}
-          </Button>
-        }
-      />
-
+    <SettingsHeader
+      title="Teams"
+      description="Create and manage teams to collaborate on scheduling."
+      CTA={
+        <Button href="/settings/teams/new" StartIcon="plus" color="primary">
+          {t("new_team")}
+        </Button>
+      }>
       {/* Pending invitations */}
       {pendingInvites && pendingInvites.length > 0 && (
         <div className="border-subtle bg-subtle mb-6 rounded-lg border p-4">
@@ -145,6 +142,6 @@ export default function TeamsSettingsPage() {
           ))}
         </div>
       )}
-    </>
+    </SettingsHeader>
   );
 }

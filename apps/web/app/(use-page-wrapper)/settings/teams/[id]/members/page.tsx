@@ -7,8 +7,8 @@ import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { trpc } from "@calcom/trpc/react";
 import { Button } from "@calcom/ui/components/button";
 import { Icon } from "@calcom/ui/components/icon";
-import { Meta } from "@calcom/ui/components/meta";
 import { Avatar } from "@calcom/ui/components/avatar";
+import SettingsHeader from "@calcom/features/settings/appDir/SettingsHeader";
 import { Badge } from "@calcom/ui/components/badge";
 import { TextField } from "@calcom/ui/components/form";
 import { showToast } from "@calcom/ui/components/toast";
@@ -107,22 +107,19 @@ export default function TeamMembersPage() {
   ];
 
   return (
-    <>
-      <Meta
-        title={`${team.name} — Members`}
-        description={`Manage members of ${team.name}`}
-        CTA={
-          <div className="flex gap-2">
-            <Button color="secondary" onClick={() => setShowDeleteDialog(true)} StartIcon="trash-2">
-              Delete team
-            </Button>
-            <Button color="primary" onClick={() => setShowInviteDialog(true)} StartIcon="plus">
-              Invite member
-            </Button>
-          </div>
-        }
-      />
-
+    <SettingsHeader
+      title={`${team.name} — Members`}
+      description={`Manage members of ${team.name}`}
+      CTA={
+        <div className="flex gap-2">
+          <Button color="secondary" onClick={() => setShowDeleteDialog(true)} StartIcon="trash-2">
+            Delete team
+          </Button>
+          <Button color="primary" onClick={() => setShowInviteDialog(true)} StartIcon="plus">
+            Invite member
+          </Button>
+        </div>
+      }>
       {/* Members list */}
       <div className="bg-default border-subtle divide-subtle divide-y rounded-lg border">
         {members?.map((member) => (
@@ -241,6 +238,6 @@ export default function TeamMembersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </SettingsHeader>
   );
 }

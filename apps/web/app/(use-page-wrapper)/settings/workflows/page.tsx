@@ -8,8 +8,8 @@ import { Badge } from "@calcom/ui/components/badge";
 import { Button } from "@calcom/ui/components/button";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
 import { Icon } from "@calcom/ui/components/icon";
-import { Meta } from "@calcom/ui/components/meta";
 import { showToast } from "@calcom/ui/components/toast";
+import SettingsHeader from "@calcom/features/settings/appDir/SettingsHeader";
 
 const TRIGGER_LABELS: Record<string, string> = {
   BEFORE_EVENT: "Before Event",
@@ -52,17 +52,14 @@ export default function WorkflowsSettingsPage() {
   }
 
   return (
-    <>
-      <Meta
-        title="Workflows"
-        description="Automate notifications and reminders for your events."
-        CTA={
-          <Button href="/settings/workflows/new" StartIcon="plus" color="primary">
-            New workflow
-          </Button>
-        }
-      />
-
+    <SettingsHeader
+      title="Workflows"
+      description="Automate notifications and reminders for your events."
+      CTA={
+        <Button href="/settings/workflows/new" StartIcon="plus" color="primary">
+          New workflow
+        </Button>
+      }>
       {!workflows || workflows.length === 0 ? (
         <EmptyScreen
           Icon="zap"
@@ -128,6 +125,6 @@ export default function WorkflowsSettingsPage() {
           ))}
         </div>
       )}
-    </>
+    </SettingsHeader>
   );
 }

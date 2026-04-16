@@ -7,8 +7,8 @@ import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { trpc } from "@calcom/trpc/react";
 import { Button } from "@calcom/ui/components/button";
 import { Icon } from "@calcom/ui/components/icon";
-import { Meta } from "@calcom/ui/components/meta";
 import { TextField } from "@calcom/ui/components/form";
+import SettingsHeader from "@calcom/features/settings/appDir/SettingsHeader";
 import { TextAreaField } from "@calcom/ui/components/form";
 import { showToast } from "@calcom/ui/components/toast";
 
@@ -190,12 +190,9 @@ export default function CreateWorkflowPage() {
   }
 
   return (
-    <>
-      <Meta
-        title={editId ? "Edit Workflow" : "Create Workflow"}
-        description={editId ? "Edit your automation workflow." : "Set up a new automation workflow for your events."}
-      />
-
+    <SettingsHeader
+      title={editId ? "Edit Workflow" : "Create Workflow"}
+      description={editId ? "Edit your automation workflow." : "Set up a new automation workflow for your events."}>
       <div className="bg-default border-subtle mx-auto max-w-2xl rounded-lg border p-6">
         <h2 className="text-emphasis mb-6 text-xl font-semibold">
           {editId ? "Edit workflow" : "Create a new workflow"}
@@ -396,6 +393,6 @@ export default function CreateWorkflowPage() {
           </div>
         </form>
       </div>
-    </>
+    </SettingsHeader>
   );
 }
