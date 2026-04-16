@@ -1,60 +1,48 @@
-import { z } from "zod";
-import { createTRPCRouter } from "@calcom/trpc/server";
-import { defaultProcedures } from "@calcom/trpc/server/routers/_default Procedures";
-
-import type { TGetInputSchema, TListOutputSchema } from "./routing-forms.schema";
+import authedProcedure from "../../../procedures/authedProcedure";
+import { router } from "../../../trpc";
 import {
+  createHandler,
   deleteHandler,
   getHandler,
   getResponsesHandler,
   listHandler,
   saveResponseHandler,
-  createHandler,
   updateHandler,
 } from "./routing-forms.handler";
 import {
   RoutingFormIdSchema,
   RoutingFormInputSchema,
-  RoutingFormResponseInputSchema,
   RoutingFormQuerySchema,
-  RoutingFormUpdateSchema,
+  RoutingFormResponseInputSchema,
+  RoutingFormUpdateWithIdSchema,
 } from "./routing-forms.schema";
 
-export const routingFormsRouter = createTRPCRouter({
-  // List routing forms
-  list: defaultProcedures.list.query(({ ctx }) => listHandler({ ctx })),
-
-  // Get routing form by ID
-  get: defaultProcedures.get.input(RoutingFormIdSchema).query(({ input, ctx }) => {
-    return getHandler({ input: input as TGetInputSchema, ctx });
+export const routingFormsRouter = router({
+  list: authedProcedure.input(RoutingFormQuerySchema).query(async ({ ctx, input }) => {
+    return listHandler({ ctx, input });
   }),
 
-  // Create routing form
-  create: defaultProcedures.create.input(RoutingFormInputSchema).mutation(({ input, ctx }) => {
-    return createHandler({ input: input as any, ctx });
+  get: authedProcedure.input(RoutingFormIdSchema).query(async ({ input, ctx }) => {
+    return getHandler({ input, ctx });
   }),
 
-  // Update routing form
-  update: defaultProcedures.update
-    .input(RoutingFormIdSchema.merge(RoutingFormUpdateSchema))
-    .mutation(({ input, ctx }) => {
-      return updateHandler({ input: input as any, ctx });
-    }),
-
-  // Delete routing form
-  delete: defaultProcedures.delete.input(RoutingFormIdSchema).mutation(({ input, ctx }) => {
-    return deleteHandler({ input: input as TGetInputSchema, ctx });
+  create: authedProcedure.input(RoutingFormInputSchema).mutation(async ({ input, ctx }) => {
+    return createHandler({ input, ctx });
   }),
 
-  // Save form response
-  saveResponse: defaultProcedures.create
-    .input(RoutingFormResponseInputSchema)
-    .mutation(({ input, ctx }) => {
-      return saveResponseHandler({ input: input as any, ctx });
-    }),
+  update: authedProcedure.input(RoutingFormUpdateWithIdSchema).mutation(async ({ input, ctx }) => {
+    return updateHandler({ input, ctx });
+  }),
 
-  // Get responses for a routing form
-  getResponses: defaultProcedures.get.input(RoutingFormIdSchema).query(({ input, ctx }) => {
-    return getResponsesHandler({ input: input as TGetInputSchema, ctx });
+  delete: authedProcedure.input(RoutingFormIdSchema).mutation(async ({ input, ctx }) => {
+    return deleteHandler({ input, ctx });
+  }),
+
+  saveResponse: authedProcedure.input(RoutingFormResponseInputSchema).mutation(async ({ input, ctx }) => {
+    return saveResponseHandler({ input, ctx });
+  }),
+
+  getResponses: authedProcedure.input(RoutingFormIdSchema).query(async ({ input, ctx }) => {
+    return getResponsesHandler({ input, ctx });
   }),
 });

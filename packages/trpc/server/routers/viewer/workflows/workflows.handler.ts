@@ -1,24 +1,28 @@
+import prisma from "@calcom/prisma";
 import {
-  WorkflowTriggerEvents,
-  WorkflowActions,
+  type TimeUnit,
+  type WorkflowActions,
   WorkflowTemplates,
-  TimeUnit,
+  type WorkflowTriggerEvents,
 } from "@calcom/prisma/client";
 import { TRPCError } from "@trpc/server";
-
-import prisma from "@calcom/prisma";
-
 import type { TrpcSessionUser } from "../../../types";
 import type {
-  TListInput,
-  TGetInput,
-  TCreateInput,
-  TUpdateInput,
-  TDeleteInput,
   TActivateInput,
+  TCreateInput,
   TDeactivateInput,
+  TDeleteInput,
+  TGetInput,
+  TListInput,
   TTestInput,
+  TUpdateInput,
 } from "./workflows.schema";
+
+type AuthenticatedTrpcSessionUser = NonNullable<TrpcSessionUser>;
+
+type AuthenticatedContext = {
+  user: AuthenticatedTrpcSessionUser;
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -53,13 +57,7 @@ async function assertWorkflowOwnership(userId: number, workflowId: number) {
 // ─── Handlers ────────────────────────────────────────────────────────
 
 /** List all workflows for the current user (and optionally filter by team) */
-export async function listHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input?: TListInput;
-}) {
+export async function listHandler({ ctx, input }: { ctx: AuthenticatedContext; input?: TListInput }) {
   const where: Record<string, unknown> = {};
 
   if (input?.teamId) {
@@ -78,10 +76,7 @@ export async function listHandler({
       select: { teamId: true },
     });
 
-    where.OR = [
-      { userId: ctx.user.id },
-      { teamId: { in: teamIds.map((t) => t.teamId) } },
-    ];
+    where.OR = [{ userId: ctx.user.id }, { teamId: { in: teamIds.map((t) => t.teamId) } }];
   }
 
   const workflows = await prisma.workflow.findMany({
@@ -124,13 +119,7 @@ export async function listHandler({
 }
 
 /** Get a single workflow with full steps and active event types */
-export async function getHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TGetInput;
-}) {
+export async function getHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TGetInput }) {
   await assertWorkflowOwnership(ctx.user.id, input.workflowId);
 
   const workflow = await prisma.workflow.findUnique({
@@ -184,13 +173,7 @@ export async function getHandler({
 }
 
 /** Create a new workflow with nested steps */
-export async function createHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TCreateInput;
-}) {
+export async function createHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TCreateInput }) {
   // If team workflow, verify membership
   if (input.teamId) {
     const membership = await prisma.membership.findFirst({
@@ -250,13 +233,7 @@ export async function createHandler({
 }
 
 /** Update a workflow - replaces steps entirely */
-export async function updateHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TUpdateInput;
-}) {
+export async function updateHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TUpdateInput }) {
   await assertWorkflowOwnership(ctx.user.id, input.workflowId);
 
   // Delete old steps (cascade will handle reminders)
@@ -317,13 +294,7 @@ export async function updateHandler({
 }
 
 /** Delete a workflow (check ownership) */
-export async function deleteHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TDeleteInput;
-}) {
+export async function deleteHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TDeleteInput }) {
   await assertWorkflowOwnership(ctx.user.id, input.workflowId);
 
   // Cascade delete will handle steps, reminders, and event type links
@@ -335,13 +306,7 @@ export async function deleteHandler({
 }
 
 /** Activate (link) a workflow on an event type */
-export async function activateHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TActivateInput;
-}) {
+export async function activateHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TActivateInput }) {
   await assertWorkflowOwnership(ctx.user.id, input.workflowId);
 
   // Check event type exists and belongs to user or their team
@@ -381,7 +346,7 @@ export async function deactivateHandler({
   ctx,
   input,
 }: {
-  ctx: { user: TrpcSessionUser };
+  ctx: AuthenticatedContext;
   input: TDeactivateInput;
 }) {
   await assertWorkflowOwnership(ctx.user.id, input.workflowId);
@@ -397,13 +362,7 @@ export async function deactivateHandler({
 }
 
 /** Send a test notification for a workflow step */
-export async function testHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TTestInput;
-}) {
+export async function testHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TTestInput }) {
   await assertWorkflowOwnership(ctx.user.id, input.workflowId);
 
   const step = await prisma.workflowStep.findFirst({
@@ -428,7 +387,11 @@ export async function testHandler({
 
   // For now, return success with a message indicating what would be sent.
   // In production this would integrate with email/SMS providers.
-  const actionType = step.action.startsWith("EMAIL") ? "email" : step.action.startsWith("SMS") ? "SMS" : "WhatsApp";
+  const actionType = step.action.startsWith("EMAIL")
+    ? "email"
+    : step.action.startsWith("SMS")
+      ? "SMS"
+      : "WhatsApp";
 
   return {
     success: true,

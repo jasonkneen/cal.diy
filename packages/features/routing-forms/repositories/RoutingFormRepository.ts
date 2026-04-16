@@ -1,6 +1,5 @@
-import type { Prisma } from "@calcom/prisma";
 import prisma from "@calcom/prisma";
-import { ZotActorType } from "@calcom/prisma/enums";
+import { Prisma } from "@calcom/prisma/client";
 import type {
   RoutingAction,
   RoutingField,
@@ -11,309 +10,523 @@ import type {
   RoutingRule,
 } from "../lib/types";
 
-// Type-safe select clause for routing forms queries
-const routingFormSelect = {
-  id: true,
-  name: true,
-  description: true,
-  createdAt: true,
-  updatedAt: true,
-  fields: {
-    select: {
-      id: true,
-      label: true,
-      type: true,
-      required: true,
-      options: true,
-      placeholder: true,
-      defaultValue: true,
-      description: true,
-      validation: true,
-      position: true,
-    },
-    orderBy: { position: "asc" as const },
-  },
-  actions: {
-    select: {
-      id: true,
-      actorType: true,
-      actorId: true,
-      userId: true,
-      eventTypeIds: true,
-      position: true,
-      selected: true,
-    },
-    orderBy: { position: "asc" as const },
-  },
-  rules: {
-    select: {
-      id: true,
-      fieldId: true,
-      operator: true,
-      value: true,
-    },
-  },
-} satisfies Prisma.App_RoutingForms_FormSelect;
+const ROUTING_FORM_FIELD_TYPES = [
+  "text",
+  "textarea",
+  "select",
+  "multiSelect",
+  "radio",
+  "checkbox",
+  "phone",
+  "email",
+  "number",
+  "date",
+  "hidden",
+] as const;
 
-/**
- * Repository for Routing Forms CRUD operations
- */
+const ROUTING_RULE_OPERATORS = [
+  "equals",
+  "not_equals",
+  "contains",
+  "not_contains",
+  "starts_with",
+  "ends_with",
+  "regex",
+] as const;
+
+type RoutingFormRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  fields: unknown;
+  routes: unknown;
+};
+
+type RoutingFormResponseRow = {
+  id: number;
+  formId: string;
+  response: unknown;
+  formFillerId: string | null;
+  createdAt: Date;
+  updatedAt: Date | null;
+};
+
+export const ROUTING_FORMS_TABLES_MISSING_ERROR =
+  "Routing forms feature is unavailable because required database tables are missing.";
+
+type StoredRoutes = {
+  actions?: unknown;
+  rules?: unknown;
+};
+
 export class RoutingFormRepository {
-  /**
-   * Create a new routing form
-   */
-  static async create(userId: number, data: RoutingFormSaveInput): Promise<RoutingForm> {
-    const form = await prisma.app_RoutingForms_Form.create({
-      data: {
-        userId,
-        name: data.name,
-        description: data.description,
-        fields: {
-          create: data.fields.map((field, index) => ({
-            label: field.label,
-            type: field.type,
-            required: field.required,
-            options: field.options,
-            placeholder: field.placeholder,
-            defaultValue: field.defaultValue,
-            description: field.description,
-            validation: field.validation,
-            position: index,
-          })),
-        },
-        actions: {
-          create: data.actions.map((_) => ({
-            actorType: _.actorType,
-            actorId: _.actorId,
-            userId: _.userId,
-            eventTypeIds: _.eventTypeIds,
-            position: _.position,
-            selected: _.selected,
-          })),
-        },
-        rules: data.rules
-          ? {
-              create: data.rules.map((_) => ({
-                fieldId: _.fieldId,
-                operator: _.operator,
-                value: _.value,
-              })),
-            }
-          : undefined,
-      },
-      select: routingFormSelect,
-    });
-
-    return this.transformToAppModel(form);
+  private static toArray(value: unknown): unknown[] {
+    return Array.isArray(value) ? value : [];
   }
 
-  /**
-   * Get routing form by ID with ownership check
-   */
-  static async getById(id: string, userId: number): Promise<RoutingForm | null> {
-    const form = await prisma.app_RoutingForms_Form.findFirst({
-      where: {
-        id,
-        OR: [{ userId }, { actions: { some: { actorType: ZotActorType.USER, userId } } }],
-      },
-      select: routingFormSelect,
-    });
-
-    return form ? this.transformToAppModel(form) : null;
+  private static toString(value: unknown, fallback = ""): string {
+    return typeof value === "string" ? value : fallback;
   }
 
-  /**
-   * Get routing form by ID (no ownership check - for public use)
-   */
-  static async getPublicById(id: string): Promise<RoutingForm | null> {
-    const form = await prisma.app_RoutingForms_Form.findUnique({
-      where: { id },
-      select: routingFormSelect,
-    });
+  private static toNumber(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
 
-    return form ? this.transformToAppModel(form) : null;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    return undefined;
   }
 
-  /**
-   * List all routing forms for a user
-   */
-  static async listByUser(userId: number): Promise<RoutingForm[]> {
-    const forms = await prisma.app_RoutingForms_Form.findMany({
-      where: { userId },
-      select: routingFormSelect,
-      orderBy: { createdAt: "desc" as const },
-    });
-
-    return forms.map((f) => this.transformToAppModel(f));
+  private static toNumberArray(value: unknown): number[] {
+    return RoutingFormRepository.toArray(value)
+      .map((item) => RoutingFormRepository.toNumber(item))
+      .filter((item): item is number => item !== undefined);
   }
 
-  /**
-   * Update routing form
-   */
-  static async update(id: string, userId: number, data: RoutingFormUpdateInput): Promise<RoutingForm> {
-    // Build Prisma update data
-    const updateData: Prisma.App_RoutingForms_FormUpdateInput = {
-      name: data.name,
-      description: data.description,
+  private static async executeQuery<T>(query: () => Promise<T>): Promise<T> {
+    try {
+      return await query();
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "42P01") {
+        throw new Error(ROUTING_FORMS_TABLES_MISSING_ERROR);
+      }
+      throw error;
+    }
+  }
+
+  private static toBoolean(value: unknown, fallback = false): boolean {
+    return typeof value === "boolean" ? value : fallback;
+  }
+
+  private static toRoutingFieldType(value: unknown): RoutingField["type"] {
+    const rawType = RoutingFormRepository.toString(value);
+
+    if ((ROUTING_FORM_FIELD_TYPES as readonly string[]).includes(rawType)) {
+      return rawType as RoutingField["type"];
+    }
+
+    return "text";
+  }
+
+  private static toRoutingRuleOperator(value: unknown): RoutingRule["operator"] {
+    const rawOperator = RoutingFormRepository.toString(value);
+
+    if ((ROUTING_RULE_OPERATORS as readonly string[]).includes(rawOperator)) {
+      return rawOperator as RoutingRule["operator"];
+    }
+
+    return "equals";
+  }
+
+  private static toOptionalId(value: unknown, fallback: string): string {
+    const parsed = RoutingFormRepository.toString(value);
+
+    return parsed || fallback;
+  }
+
+  private static parseFieldValidation(value: unknown): RoutingField["validation"] {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+
+    const typed = value as Record<string, unknown>;
+    const min = RoutingFormRepository.toNumber(typed.min);
+    const max = RoutingFormRepository.toNumber(typed.max);
+    const pattern = typeof typed.pattern === "string" ? typed.pattern : undefined;
+
+    if (pattern === undefined && min === undefined && max === undefined) {
+      return undefined;
+    }
+
+    return {
+      pattern,
+      min,
+      max,
     };
+  }
 
-    // Update fields if provided
-    if (data.fields) {
-      // Delete existing fields and recreate
-      await prisma.app_RoutingForms_Field.deleteMany({ where: { formId: id } });
-
-      updateData.fields = {
-        create: data.fields.map((field, index) => ({
-          label: field.label,
-          type: field.type,
-          required: field.required,
-          options: field.options,
-          placeholder: field.placeholder,
-          defaultValue: field.defaultValue,
-          description: field.description,
-          validation: field.validation,
-          position: index,
-        })),
+  private static parseField(raw: unknown, index: number): RoutingField {
+    if (!raw || typeof raw !== "object") {
+      return {
+        id: `field-${index}`,
+        label: "",
+        type: "text",
+        required: false,
       };
     }
 
-    // Update actions if provided
-    if (data.actions) {
-      await prisma.app_RoutingForms_Action.deleteMany({ where: { formId: id } });
+    const value = raw as Record<string, unknown>;
 
-      updateData.actions = {
-        create: data.actions.map((_) => ({
-          actorType: _.actorType,
-          actorId: _.actorId,
-          userId: _.userId,
-          eventTypeIds: _.eventTypeIds,
-          position: _.position,
-          selected: _.selected,
-        })),
+    return {
+      id: RoutingFormRepository.toOptionalId(value.id, `field-${index}`),
+      label: RoutingFormRepository.toString(value.label),
+      type: RoutingFormRepository.toRoutingFieldType(value.type),
+      required: RoutingFormRepository.toBoolean(value.required),
+      options: RoutingFormRepository.toArray(value.options).filter(
+        (option): option is string => typeof option === "string"
+      ),
+      placeholder: RoutingFormRepository.toString(value.placeholder) || undefined,
+      defaultValue: RoutingFormRepository.toString(value.defaultValue) || undefined,
+      description: RoutingFormRepository.toString(value.description) || undefined,
+      validation: RoutingFormRepository.parseFieldValidation(value.validation),
+    };
+  }
+
+  private static parseAction(raw: unknown, index: number): RoutingAction {
+    if (!raw || typeof raw !== "object") {
+      return {
+        id: `action-${index}`,
+        actorType: "User",
+        actorId: undefined,
+        userId: undefined,
+        eventTypeIds: undefined,
+        position: index,
+        selected: false,
       };
     }
 
-    // Update rules if provided
-    if (data.rules !== undefined) {
-      await prisma.app_RoutingForms_Rule.deleteMany({ where: { formId: id } });
+    const value = raw as Record<string, unknown>;
+    const actorType = value.actorType === "Team" ? "Team" : "User";
 
-      if (data.rules.length > 0) {
-        updateData.rules = {
-          create: data.rules.map((_) => ({
-            fieldId: _.fieldId,
-            operator: _.operator,
-            value: _.value,
-          })),
-        };
+    return {
+      id: RoutingFormRepository.toOptionalId(value.id, `action-${index}`),
+      actorType,
+      actorId: RoutingFormRepository.toNumber(value.actorId),
+      userId: RoutingFormRepository.toNumber(value.userId),
+      eventTypeIds: RoutingFormRepository.toNumberArray(value.eventTypeIds),
+      position: RoutingFormRepository.toNumber(value.position) ?? index,
+      selected: RoutingFormRepository.toBoolean(value.selected),
+    };
+  }
+
+  private static parseRule(raw: unknown, index: number): RoutingRule {
+    if (!raw || typeof raw !== "object") {
+      return {
+        id: `rule-${index}`,
+        fieldId: "",
+        operator: "equals",
+        value: "",
+      };
+    }
+
+    const value = raw as Record<string, unknown>;
+
+    return {
+      id: RoutingFormRepository.toOptionalId(value.id, `rule-${index}`),
+      fieldId: RoutingFormRepository.toString(value.fieldId),
+      operator: RoutingFormRepository.toRoutingRuleOperator(value.operator),
+      value: RoutingFormRepository.toString(value.value),
+    };
+  }
+
+  private static parseRoutes(raw: unknown): { actions: RoutingAction[]; rules: RoutingRule[] } {
+    if (!raw || typeof raw !== "object") {
+      return {
+        actions: [],
+        rules: [],
+      };
+    }
+
+    const value = raw as StoredRoutes;
+
+    const actions = RoutingFormRepository.toArray(value.actions).map((action, index) =>
+      RoutingFormRepository.parseAction(action, index)
+    );
+    const rules = RoutingFormRepository.toArray(value.rules).map((rule, index) =>
+      RoutingFormRepository.parseRule(rule, index)
+    );
+
+    return {
+      actions,
+      rules,
+    };
+  }
+
+  private static normalizeActions(actions: RoutingAction[]): RoutingAction[] {
+    return actions.map((action, index) => ({
+      ...action,
+      id: action.id || `action-${index}`,
+      actorType: action.actorType,
+      actorId: action.actorId,
+      userId: action.userId,
+      eventTypeIds: action.eventTypeIds,
+      position: action.position ?? index,
+      selected: action.selected ?? false,
+    }));
+  }
+
+  private static normalizeRules(rules: RoutingRule[]): RoutingRule[] {
+    return rules.map((rule, index) => ({
+      ...rule,
+      id: rule.id || `rule-${index}`,
+      fieldId: rule.fieldId || `field-${index}`,
+      operator: RoutingFormRepository.toRoutingRuleOperator(rule.operator),
+      value: rule.value || "",
+    }));
+  }
+
+  private static normalizeResponseValues(raw: unknown): Record<string, string> {
+    let value = raw;
+
+    if (typeof value === "string") {
+      try {
+        value = JSON.parse(value);
+      } catch {
+        return {};
       }
     }
 
-    const form = await prisma.app_RoutingForms_Form.update({
-      where: { id },
-      data: updateData,
-      select: routingFormSelect,
-    });
-
-    return this.transformToAppModel(form);
-  }
-
-  /**
-   * Delete routing form
-   */
-  static async delete(id: string, userId: number): Promise<void> {
-    const form = await this.getById(id, userId);
-    if (!form) {
-      throw new Error(`Routing form ${id} not found or access denied`);
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
     }
 
-    await prisma.app_RoutingForms_Form.delete({
-      where: { id },
-    });
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>(
+      (acc, [key, itemValue]) => {
+        if (typeof key === "string") {
+          if (typeof itemValue === "string") {
+            acc[key] = itemValue;
+          } else if (itemValue !== undefined && itemValue !== null) {
+            acc[key] = String(itemValue);
+          } else {
+            acc[key] = "";
+          }
+        }
+
+        return acc;
+      },
+      {}
+    );
   }
 
-  /**
-   * Save response to a routing form
-   */
-  static async saveResponse(formId: string, responses: Record<string, string>, userId?: number): Promise<RoutingFormResponse> {
-    const created = await prisma.app_RoutingForms_FormResponse.create({
-      data: {
-        formId,
-        responses: responses as Prisma.InputJsonValue,
-        userId,
-      },
-      select: {
-        id: true,
-        formId: true,
-        responses: true,
-        userId: true,
-        createdAt: true,
-      },
-    });
+  private static parseUserId(formFillerId: string | null): number | undefined {
+    if (!formFillerId) {
+      return undefined;
+    }
 
-    return created as RoutingFormResponse;
+    const maybeNumber = Number(formFillerId);
+
+    return Number.isNaN(maybeNumber) || !Number.isFinite(maybeNumber) ? undefined : maybeNumber;
   }
 
-  /**
-   * Get responses for a routing form
-   */
-  static async getResponses(formId: string, userId: number): Promise<RoutingFormResponse[]> {
-    const responses = await prisma.app_RoutingForms_FormResponse.findMany({
-      where: {
-        formId,
-        form: { userId },
-      },
-      orderBy: { createdAt: "desc" as const },
-    });
+  private static toRoutingForm(row: RoutingFormRow): RoutingForm {
+    const { actions, rules } = RoutingFormRepository.parseRoutes(row.routes);
 
-    return responses as RoutingFormResponse[];
-  }
-
-  /**
-   * Transform Prisma model to app model
-   */
-  private static transformToAppModel(
-    data: Prisma.App_RoutingForms_FormGetPayload<{ select: typeof routingFormSelect }>
-  ): RoutingForm {
     return {
-      id: data.id,
-      name: data.name,
-      description: data.description || undefined,
-      fields: data.fields
-        .sort((a, b) => a.position - b.position)
-        .map((f) => ({
-          id: f.id,
-          label: f.label,
-          type: f.type,
-          required: f.required,
-          options: f.options as string[] | undefined,
-          placeholder: f.placeholder || undefined,
-          defaultValue: f.defaultValue || undefined,
-          description: f.description || undefined,
-          validation: f.validation as {
-            pattern?: string;
-            min?: number;
-            max?: number;
-          } | undefined,
-        })),
-      actions: data.actions
-        .sort((a, b) => a.position - b.position)
-        .map((a) => ({
-          id: a.id,
-          actorType: a.actorType,
-          actorId: a.actorId || undefined,
-          userId: a.userId || undefined,
-          eventTypeIds: (a.eventTypeIds as number[]) || undefined,
-          position: a.position,
-          selected: a.selected,
-        })),
-      rules: data.rules.map((r) => ({
-        id: r.id,
-        fieldId: r.fieldId,
-        operator: r.operator,
-        value: r.value,
-      })),
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
+      id: row.id,
+      name: row.name,
+      description: row.description ?? undefined,
+      fields: RoutingFormRepository.toArray(row.fields).map((field, index) =>
+        RoutingFormRepository.parseField(field, index)
+      ),
+      actions,
+      rules,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
+  }
+
+  private static toRoutingFormResponse(row: RoutingFormResponseRow): RoutingFormResponse {
+    return {
+      id: row.id,
+      formId: row.formId,
+      responses: RoutingFormRepository.normalizeResponseValues(row.response),
+      formFillerId: row.formFillerId ?? undefined,
+      userId: RoutingFormRepository.parseUserId(row.formFillerId),
+      createdAt: row.createdAt,
+    };
+  }
+
+  private static async getFormByIdAndUser(formId: string, userId: number): Promise<RoutingForm | null> {
+    const rows = await RoutingFormRepository.executeQuery(() =>
+      prisma.$queryRaw<RoutingFormRow[]>(Prisma.sql`
+        SELECT id, name, description, "fields", routes, "createdAt", "updatedAt"
+        FROM "App_RoutingForms_Form"
+        WHERE id = ${formId}
+          AND (
+            "userId" = ${userId}
+            OR EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(COALESCE(routes -> 'actions', '[]'::jsonb)) AS action
+              WHERE action ->> 'actorType' = 'User'
+                AND CASE
+                  WHEN (action ->> 'userId') ~ '^-?\\d+$'
+                    THEN (action ->> 'userId')::int
+                  ELSE NULL
+                END = ${userId}
+            )
+          )
+        LIMIT 1
+      `)
+    );
+
+    const [row] = rows;
+
+    if (!row) {
+      return null;
+    }
+
+    return RoutingFormRepository.toRoutingForm(row);
+  }
+
+  private static async getFormByOwner(formId: string, userId: number): Promise<RoutingForm | null> {
+    const rows = await RoutingFormRepository.executeQuery(() =>
+      prisma.$queryRaw<RoutingFormRow[]>(Prisma.sql`
+        SELECT id, name, description, "fields", routes, "createdAt", "updatedAt"
+        FROM "App_RoutingForms_Form"
+        WHERE id = ${formId}
+          AND "userId" = ${userId}
+        LIMIT 1
+      `)
+    );
+
+    const [row] = rows;
+
+    if (!row) {
+      return null;
+    }
+
+    return RoutingFormRepository.toRoutingForm(row);
+  }
+
+  static async listByUser(userId: number, limit?: number): Promise<RoutingForm[]> {
+    const rows = await RoutingFormRepository.executeQuery(() =>
+      prisma.$queryRaw<RoutingFormRow[]>(Prisma.sql`
+        SELECT id, name, description, "fields", routes, "createdAt", "updatedAt"
+        FROM "App_RoutingForms_Form"
+        WHERE "userId" = ${userId}
+        ORDER BY "createdAt" DESC
+        LIMIT ${limit ?? 50}
+      `)
+    );
+
+    return rows.map((row) => RoutingFormRepository.toRoutingForm(row));
+  }
+
+  static async getById(id: string, userId: number): Promise<RoutingForm | null> {
+    return RoutingFormRepository.getFormByIdAndUser(id, userId);
+  }
+
+  static async create(userId: number, data: RoutingFormSaveInput): Promise<RoutingForm> {
+    const payload = {
+      actions: RoutingFormRepository.normalizeActions(data.actions),
+      rules: RoutingFormRepository.normalizeRules(data.rules ?? []),
+    };
+
+    const created = await RoutingFormRepository.executeQuery(() =>
+      prisma.$queryRaw<RoutingFormRow[]>(Prisma.sql`
+        INSERT INTO "App_RoutingForms_Form" (name, description, "userId", fields, routes)
+        VALUES (${data.name}, ${data.description ?? null}, ${userId}, ${data.fields}, ${payload})
+        RETURNING id, name, description, "fields", routes, "createdAt", "updatedAt"
+      `)
+    );
+
+    const [row] = created;
+
+    if (!row) {
+      throw new Error("Failed to create routing form");
+    }
+
+    return RoutingFormRepository.toRoutingForm(row);
+  }
+
+  static async update(id: string, userId: number, data: RoutingFormUpdateInput): Promise<RoutingForm> {
+    const currentForm = await RoutingFormRepository.getFormByOwner(id, userId);
+
+    if (!currentForm) {
+      throw new Error(`Routing form ${id} not found`);
+    }
+
+    const fields = data.fields
+      ? data.fields.map((field, index) => RoutingFormRepository.parseField(field, index))
+      : currentForm.fields;
+    const actions = data.actions ? RoutingFormRepository.normalizeActions(data.actions) : currentForm.actions;
+    const rules = data.rules ? RoutingFormRepository.normalizeRules(data.rules) : currentForm.rules;
+
+    const payload = {
+      actions,
+      rules,
+    };
+
+    const updated = await RoutingFormRepository.executeQuery(() =>
+      prisma.$queryRaw<RoutingFormRow[]>(Prisma.sql`
+        UPDATE "App_RoutingForms_Form"
+        SET name = ${data.name ?? currentForm.name},
+            description = ${data.description ?? currentForm.description ?? null},
+            fields = ${fields},
+            routes = ${payload}
+        WHERE id = ${id}
+          AND "userId" = ${userId}
+        RETURNING id, name, description, "fields", routes, "createdAt", "updatedAt"
+      `)
+    );
+
+    const [row] = updated;
+
+    if (!row) {
+      throw new Error(`Routing form ${id} not found`);
+    }
+
+    return RoutingFormRepository.toRoutingForm(row);
+  }
+
+  static async delete(id: string, userId: number): Promise<void> {
+    const deletedCount = await RoutingFormRepository.executeQuery(
+      () =>
+        prisma.$executeRaw`
+        DELETE FROM "App_RoutingForms_Form"
+        WHERE id = ${id}
+          AND "userId" = ${userId}
+      `
+    );
+
+    if (deletedCount === 0) {
+      throw new Error(`Routing form ${id} not found`);
+    }
+  }
+
+  static async saveResponse(
+    formId: string,
+    responses: Record<string, string>,
+    userId: number
+  ): Promise<RoutingFormResponse> {
+    // formFillerId must be unique per (formId, formFillerId). Using userId.toString()
+    // would block a user from submitting the same form twice. Use a per-submission UUID
+    // and persist the userId separately via response payload if attribution is needed.
+    const formFillerId = crypto.randomUUID();
+    const [inserted] = await RoutingFormRepository.executeQuery(() =>
+      prisma.$queryRaw<RoutingFormResponseRow[]>(Prisma.sql`
+        INSERT INTO "App_RoutingForms_FormResponse" ("formId", response, "formFillerId")
+        VALUES (${formId}, ${responses}, ${formFillerId})
+        RETURNING id, "formId", response, "formFillerId", "createdAt", "updatedAt"
+      `)
+    );
+
+    if (!inserted) {
+      throw new Error("Failed to save routing form response");
+    }
+
+    return RoutingFormRepository.toRoutingFormResponse(inserted);
+  }
+
+  static async getResponses(formId: string, userId: number): Promise<RoutingFormResponse[]> {
+    const rows = await RoutingFormRepository.executeQuery(() =>
+      prisma.$queryRaw<RoutingFormResponseRow[]>(Prisma.sql`
+        SELECT r.id, r."formId", r.response, r."formFillerId", r."createdAt", r."updatedAt"
+        FROM "App_RoutingForms_FormResponse" r
+        INNER JOIN "App_RoutingForms_Form" f
+          ON f.id = r."formId"
+        WHERE r."formId" = ${formId}
+          AND f."userId" = ${userId}
+        ORDER BY r."createdAt" DESC
+      `)
+    );
+
+    return rows.map((row) => RoutingFormRepository.toRoutingFormResponse(row));
   }
 }

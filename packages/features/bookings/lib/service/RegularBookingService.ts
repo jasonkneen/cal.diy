@@ -45,8 +45,6 @@ import type { UserRepository } from "@calcom/features/users/repositories/UserRep
 import { UsersRepository } from "@calcom/features/users/users.repository";
 import type { GetSubscriberOptions } from "@calcom/features/webhooks/lib/getWebhooks";
 import getWebhooks from "@calcom/features/webhooks/lib/getWebhooks";
-import { evaluateWorkflows } from "@calcom/features/workflows/lib/engine";
-import { WorkflowTriggerEvents } from "@calcom/prisma/enums";
 import type { IWebhookProducerService } from "@calcom/features/webhooks/lib/interface/WebhookProducerService";
 import {
   cancelNoShowTasksForBooking,
@@ -54,6 +52,7 @@ import {
   scheduleTrigger,
 } from "@calcom/features/webhooks/lib/scheduleTrigger";
 import type { EventPayloadType, EventTypeInfo } from "@calcom/features/webhooks/lib/sendPayload";
+import { evaluateWorkflows } from "@calcom/features/workflows/lib/engine";
 import { getTranslation } from "@calcom/i18n/server";
 import { groupHostsByGroupId } from "@calcom/lib/bookings/hostGroupUtils";
 import { shouldIgnoreContactOwner } from "@calcom/lib/bookings/routing/utils";
@@ -71,7 +70,13 @@ import { getTimeFormatStringFromUserTimeFormat } from "@calcom/lib/timeFormat";
 import { distributedTracing } from "@calcom/lib/tracing/factory";
 import type { PrismaClient } from "@calcom/prisma";
 import type { AssignmentReasonEnum, DestinationCalendar, Prisma, User } from "@calcom/prisma/client";
-import { BookingStatus, CreationSource, SchedulingType, WebhookTriggerEvents } from "@calcom/prisma/enums";
+import {
+  BookingStatus,
+  CreationSource,
+  SchedulingType,
+  WebhookTriggerEvents,
+  WorkflowTriggerEvents,
+} from "@calcom/prisma/enums";
 import { userMetadata as userMetadataSchema } from "@calcom/prisma/zod-utils";
 import type {
   AdditionalInformation,
@@ -1752,10 +1757,12 @@ async function handler(
       if (!isDryRun && booking && booking.id) {
         try {
           await evaluateWorkflows({
-            trigger: reqBody.rescheduledBy ? WorkflowTriggerEvents.RESCHEDULE_EVENT : WorkflowTriggerEvents.NEW_EVENT,
+            trigger: reqBody.rescheduledBy
+              ? WorkflowTriggerEvents.RESCHEDULE_EVENT
+              : WorkflowTriggerEvents.NEW_EVENT,
             booking: {
               uid: booking.uid ?? "",
-              eventTypeId: booking.eventTypeId,
+              eventTypeId: booking.eventTypeId ?? eventTypeId,
               title: booking.title,
               startTime: booking.startTime,
               endTime: booking.endTime,
@@ -1769,7 +1776,7 @@ async function handler(
                 name: organizerUser.name ?? "",
                 timeZone: organizerUser.timeZone,
               },
-              additionalNotes: booking.additionalNotes ?? undefined,
+              additionalNotes: additionalNotes ?? undefined,
             },
           });
         } catch (workflowError) {

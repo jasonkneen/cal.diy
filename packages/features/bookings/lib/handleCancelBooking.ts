@@ -1,3 +1,4 @@
+import process from "node:process";
 import { DailyLocationType } from "@calcom/app-store/constants";
 import { FAKE_DAILY_CREDENTIAL } from "@calcom/app-store/dailyvideo/lib/VideoApiAdapter";
 import { eventTypeMetaDataSchemaWithTypedApps } from "@calcom/app-store/zod-utils";
@@ -19,29 +20,27 @@ import {
   cancelNoShowTasksForBooking,
   deleteWebhookScheduledTriggers,
 } from "@calcom/features/webhooks/lib/scheduleTrigger";
-import { evaluateWorkflows } from "@calcom/features/workflows/lib/engine";
-import { WorkflowTriggerEvents } from "@calcom/prisma/enums";
 import sendPayload from "@calcom/features/webhooks/lib/sendOrSchedulePayload";
 import type { EventTypeInfo } from "@calcom/features/webhooks/lib/sendPayload";
+import { evaluateWorkflows } from "@calcom/features/workflows/lib/engine";
+import { getTranslation } from "@calcom/i18n/server";
 import { HttpError } from "@calcom/lib/http-error";
 import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
 import logger from "@calcom/lib/logger";
 import { safeStringify } from "@calcom/lib/safeStringify";
-import { getTranslation } from "@calcom/i18n/server";
 import { getTimeFormatStringFromUserTimeFormat } from "@calcom/lib/timeFormat";
 // TODO: Prisma import would be used from DI in a followup PR when we remove `handler` export
 import prisma from "@calcom/prisma";
 import type { WebhookTriggerEvents } from "@calcom/prisma/enums";
-import { BookingStatus } from "@calcom/prisma/enums";
-
-import { isCancellationReasonRequired } from "./cancellationReason";
+import { BookingStatus, WorkflowTriggerEvents } from "@calcom/prisma/enums";
 import type { EventTypeMetadata } from "@calcom/prisma/zod-utils";
 import { bookingCancelInput } from "@calcom/prisma/zod-utils";
 import type { CalendarEvent } from "@calcom/types/Calendar";
 import type { z } from "zod";
 import { BookingRepository } from "../repositories/BookingRepository";
 import { PrismaBookingAttendeeRepository } from "../repositories/PrismaBookingAttendeeRepository";
+import { isCancellationReasonRequired } from "./cancellationReason";
 import type {
   CancelBookingMeta,
   CancelRegularBookingData,
@@ -81,17 +80,13 @@ type Dependencies = {
 
 async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
   const prismaClient = prisma;
-  const {
-    userRepository,
-    bookingRepository,
-    bookingReferenceRepository,
-    attendeeRepository,
-  } = dependencies || {
-    userRepository: new UserRepository(prismaClient),
-    bookingRepository: new BookingRepository(prismaClient),
-    bookingReferenceRepository: new BookingReferenceRepository({ prismaClient }),
-    attendeeRepository: new PrismaBookingAttendeeRepository(prismaClient),
-  };
+  const { userRepository, bookingRepository, bookingReferenceRepository, attendeeRepository } =
+    dependencies || {
+      userRepository: new UserRepository(prismaClient),
+      bookingRepository: new BookingRepository(prismaClient),
+      bookingReferenceRepository: new BookingReferenceRepository({ prismaClient }),
+      attendeeRepository: new PrismaBookingAttendeeRepository(prismaClient),
+    };
   const body = input.bookingData;
   const {
     id,
@@ -113,7 +108,6 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
     platformRescheduleUrl,
     arePlatformEmailsEnabled,
   } = input;
-
 
   /**
    * Important: We prevent cancelling an already cancelled booking.
@@ -147,7 +141,12 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
     isCancellationUserHost
   );
 
-  if (!platformClientId && !cancellationReason?.trim() && isReasonRequired && !skipCancellationReasonValidation) {
+  if (
+    !platformClientId &&
+    !cancellationReason?.trim() &&
+    isReasonRequired &&
+    !skipCancellationReasonValidation
+  ) {
     throw new HttpError({
       statusCode: 400,
       message: "Cancellation reason is required",
@@ -401,7 +400,7 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
         trigger: WorkflowTriggerEvents.EVENT_CANCELLED,
         booking: {
           uid: bookingToDelete.uid ?? "",
-          eventTypeId: bookingToDelete.eventTypeId,
+          eventTypeId: bookingToDelete.eventTypeId ?? 0,
           title: bookingToDelete.title,
           startTime: bookingToDelete.startTime,
           endTime: bookingToDelete.endTime,
@@ -415,7 +414,7 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
             name: bookingToDelete.user.name ?? "",
             timeZone: bookingToDelete.user.timeZone,
           },
-          additionalNotes: bookingToDelete.additionalNotes ?? undefined,
+          additionalNotes: bookingToDelete.description ?? undefined,
         },
       });
     } catch (workflowError) {

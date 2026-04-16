@@ -1,4 +1,4 @@
-import { ZotActorType } from "@calcom/prisma/enums";
+export type RoutingActorType = "User" | "Team";
 
 export type RoutingFormFieldType =
   | "text"
@@ -29,9 +29,12 @@ export interface RoutingFormField {
   };
 }
 
+// Backward-compatible alias used by a few older imports in this feature.
+export type RoutingField = RoutingFormField;
+
 export interface RoutingAction {
   id: string;
-  actorType: ZotActorType;
+  actorType: RoutingActorType;
   actorId?: number | null; // Team id (null if individual)
   userId?: number | null; // User id (null if team)
   eventTypeIds?: number[]; // Route to specific event types
@@ -52,16 +55,17 @@ export interface RoutingForm {
   description?: string;
   fields: RoutingFormField[];
   actions: RoutingAction[];
-  rules?: RoutingRule[]; // Conditional routing rules
+  rules?: RoutingRule[];
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface RoutingFormResponse {
-  id: string;
+  id: number;
   formId: string;
   responses: Record<string, string>; // fieldId → value
   userId?: number;
+  formFillerId?: string;
   createdAt: Date;
 }
 

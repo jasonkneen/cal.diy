@@ -1,20 +1,25 @@
-import { MembershipRole, Prisma } from "@calcom/prisma/client";
-import { TRPCError } from "@trpc/server";
-
 import prisma from "@calcom/prisma";
+import { MembershipRole } from "@calcom/prisma/client";
+import { TRPCError } from "@trpc/server";
+import type { TrpcSessionUser } from "../../../types";
 
-import type { TrpcSessionUser } from "../../../trpc";
+type AuthenticatedTrpcSessionUser = NonNullable<TrpcSessionUser>;
+
+type AuthenticatedContext = {
+  user: AuthenticatedTrpcSessionUser;
+};
+
 import type {
-  TListInput,
-  TGetInput,
-  TCreateInput,
-  TUpdateInput,
-  TDeleteInput,
-  TInviteMemberInput,
-  TRemoveMemberInput,
   TChangeMemberRoleInput,
+  TCreateInput,
+  TDeleteInput,
+  TGetInput,
   TInvitationInput,
+  TInviteMemberInput,
+  TListInput,
   TListMembersInput,
+  TRemoveMemberInput,
+  TUpdateInput,
 } from "./teams.schema";
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -71,13 +76,7 @@ async function assertMember(userId: number, teamId: number) {
 // ─── Handlers ────────────────────────────────────────────────────────
 
 /** List all teams the current user belongs to */
-export async function listHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input?: TListInput;
-}) {
+export async function listHandler({ ctx, input }: { ctx: AuthenticatedContext; input?: TListInput }) {
   const memberships = await prisma.membership.findMany({
     where: { userId: ctx.user.id, accepted: true },
     select: {
@@ -118,13 +117,7 @@ export async function listHandler({
 }
 
 /** Get a single team by ID */
-export async function getHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TGetInput;
-}) {
+export async function getHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TGetInput }) {
   await assertMember(ctx.user.id, input.teamId);
 
   const team = await prisma.team.findUnique({
@@ -177,13 +170,7 @@ export async function getHandler({
 }
 
 /** Create a new team */
-export async function createHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TCreateInput;
-}) {
+export async function createHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TCreateInput }) {
   const slug = input.slug || slugify(input.name);
 
   // Check slug uniqueness
@@ -223,13 +210,7 @@ export async function createHandler({
 }
 
 /** Update team settings */
-export async function updateHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TUpdateInput;
-}) {
+export async function updateHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TUpdateInput }) {
   await assertAdminOrOwner(ctx.user.id, input.teamId);
 
   const { teamId, slug, ...data } = input;
@@ -265,13 +246,7 @@ export async function updateHandler({
 }
 
 /** Delete a team (owner only) */
-export async function deleteHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TDeleteInput;
-}) {
+export async function deleteHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TDeleteInput }) {
   await assertOwner(ctx.user.id, input.teamId);
 
   // Delete all memberships first, then the team
@@ -287,7 +262,7 @@ export async function inviteMemberHandler({
   ctx,
   input,
 }: {
-  ctx: { user: TrpcSessionUser };
+  ctx: AuthenticatedContext;
   input: TInviteMemberInput;
 }) {
   await assertAdminOrOwner(ctx.user.id, input.teamId);
@@ -338,7 +313,7 @@ export async function removeMemberHandler({
   ctx,
   input,
 }: {
-  ctx: { user: TrpcSessionUser };
+  ctx: AuthenticatedContext;
   input: TRemoveMemberInput;
 }) {
   // Can't remove yourself (use leave instead)
@@ -371,7 +346,7 @@ export async function changeMemberRoleHandler({
   ctx,
   input,
 }: {
-  ctx: { user: TrpcSessionUser };
+  ctx: AuthenticatedContext;
   input: TChangeMemberRoleInput;
 }) {
   await assertOwner(ctx.user.id, input.teamId);
@@ -397,7 +372,7 @@ export async function acceptInviteHandler({
   ctx,
   input,
 }: {
-  ctx: { user: TrpcSessionUser };
+  ctx: AuthenticatedContext;
   input: TInvitationInput;
 }) {
   const membership = await prisma.membership.findFirst({
@@ -417,13 +392,7 @@ export async function acceptInviteHandler({
 }
 
 /** Decline / leave a team */
-export async function leaveHandler({
-  ctx,
-  input,
-}: {
-  ctx: { user: TrpcSessionUser };
-  input: TInvitationInput;
-}) {
+export async function leaveHandler({ ctx, input }: { ctx: AuthenticatedContext; input: TInvitationInput }) {
   const membership = await prisma.membership.findFirst({
     where: { userId: ctx.user.id, teamId: input.teamId },
   });
@@ -460,7 +429,7 @@ export async function listMembersHandler({
   ctx,
   input,
 }: {
-  ctx: { user: TrpcSessionUser };
+  ctx: AuthenticatedContext;
   input: TListMembersInput;
 }) {
   await assertMember(ctx.user.id, input.teamId);
@@ -490,11 +459,7 @@ export async function listMembersHandler({
 }
 
 /** Get pending invitations for the current user */
-export async function pendingInvitesHandler({
-  ctx,
-}: {
-  ctx: { user: TrpcSessionUser };
-}) {
+export async function pendingInvitesHandler({ ctx }: { ctx: AuthenticatedContext }) {
   const invites = await prisma.membership.findMany({
     where: { userId: ctx.user.id, accepted: false },
     select: {
