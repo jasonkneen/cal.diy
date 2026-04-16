@@ -105,6 +105,18 @@ const getTabs = (
       ],
     },
     {
+      name: "routing_forms",
+      href: "/settings/routing-forms",
+      icon: "layout-grid",
+      children: [
+        {
+          name: "routing_forms",
+          href: "/settings/routing-forms",
+          trackingMetadata: { section: "routing_forms", page: "routing_forms_list" },
+        },
+      ],
+    },
+    {
       name: "security",
       href: "/settings/security",
       icon: "key",
