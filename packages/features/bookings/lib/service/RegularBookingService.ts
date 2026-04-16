@@ -45,6 +45,8 @@ import type { UserRepository } from "@calcom/features/users/repositories/UserRep
 import { UsersRepository } from "@calcom/features/users/users.repository";
 import type { GetSubscriberOptions } from "@calcom/features/webhooks/lib/getWebhooks";
 import getWebhooks from "@calcom/features/webhooks/lib/getWebhooks";
+import { evaluateWorkflows } from "@calcom/features/workflows/lib/engine";
+import { WorkflowTriggerEvents } from "@calcom/prisma/enums";
 import type { IWebhookProducerService } from "@calcom/features/webhooks/lib/interface/WebhookProducerService";
 import {
   cancelNoShowTasksForBooking,
@@ -1744,6 +1746,39 @@ async function handler(
             ? formatAvailabilitySnapshot(organizerUserAvailability.availabilityData)
             : null,
         });
+      }
+
+      // Trigger workflow evaluation for new bookings
+      if (!isDryRun && booking && booking.id) {
+        try {
+          await evaluateWorkflows({
+            trigger: reqBody.rescheduledBy ? WorkflowTriggerEvents.RESCHEDULE_EVENT : WorkflowTriggerEvents.NEW_EVENT,
+            booking: {
+              uid: booking.uid ?? "",
+              eventTypeId: booking.eventTypeId,
+              title: booking.title,
+              startTime: booking.startTime,
+              endTime: booking.endTime,
+              attendees: booking.attendees.map((attendee) => ({
+                email: attendee.email,
+                name: attendee.name,
+                timeZone: attendee.timeZone,
+              })),
+              organizer: {
+                email: organizerUser.email,
+                name: organizerUser.name ?? "",
+                timeZone: organizerUser.timeZone,
+              },
+              additionalNotes: booking.additionalNotes ?? undefined,
+            },
+          });
+        } catch (workflowError) {
+          // Non-blocking: log error but continue with booking flow
+          criticalLogger.warn("Workflow evaluation failed", {
+            bookingUid: booking.uid,
+            error: workflowError instanceof Error ? workflowError.message : String(workflowError),
+          });
+        }
       }
 
       evt = CalendarEventBuilder.fromEvent(evt)

@@ -19,6 +19,8 @@ import {
   cancelNoShowTasksForBooking,
   deleteWebhookScheduledTriggers,
 } from "@calcom/features/webhooks/lib/scheduleTrigger";
+import { evaluateWorkflows } from "@calcom/features/workflows/lib/engine";
+import { WorkflowTriggerEvents } from "@calcom/prisma/enums";
 import sendPayload from "@calcom/features/webhooks/lib/sendOrSchedulePayload";
 import type { EventTypeInfo } from "@calcom/features/webhooks/lib/sendPayload";
 import { HttpError } from "@calcom/lib/http-error";
@@ -392,6 +394,34 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
     });
 
     updatedBookings.push(updatedBooking);
+
+    // Trigger workflow evaluation for cancelled bookings
+    try {
+      await evaluateWorkflows({
+        trigger: WorkflowTriggerEvents.EVENT_CANCELLED,
+        booking: {
+          uid: bookingToDelete.uid ?? "",
+          eventTypeId: bookingToDelete.eventTypeId,
+          title: bookingToDelete.title,
+          startTime: bookingToDelete.startTime,
+          endTime: bookingToDelete.endTime,
+          attendees: bookingToDelete.attendees.map((attendee) => ({
+            email: attendee.email,
+            name: attendee.name,
+            timeZone: attendee.timeZone,
+          })),
+          organizer: {
+            email: bookingToDelete.user.email,
+            name: bookingToDelete.user.name ?? "",
+            timeZone: bookingToDelete.user.timeZone,
+          },
+          additionalNotes: bookingToDelete.additionalNotes ?? undefined,
+        },
+      });
+    } catch (workflowError) {
+      // Non-blocking: log error but continue with cancellation flow
+      log.warn(`Workflow evaluation failed for cancelled booking ${bookingToDelete.uid}:`, workflowError);
+    }
 
     if (bookingToDelete.payment.some((payment) => payment.paymentOption === "ON_BOOKING")) {
       try {
