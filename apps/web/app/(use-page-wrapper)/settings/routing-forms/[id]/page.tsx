@@ -11,6 +11,10 @@ import { Meta } from "@calcom/ui/components/meta";
 import { TextField } from "@calcom/ui/components/form";
 import { TextAreaField } from "@calcom/ui/components/form";
 import { showToast } from "@calcom/ui/components/toast";
+import { RoutingFormFieldEditor } from "@calcom/features/routing-forms/components/RoutingFormFieldEditor";
+
+import type { RoutingForm, RoutingFormField } from "@calcom/features/routing-forms/lib/types";
+import { ROUTING_FORM_TEMPLATES } from "@calcom/features/routing-forms/lib/constants";
 
 type ActiveTab = "info" | "fields" | "actions" | "rules";
 
@@ -24,16 +28,38 @@ export default function RoutingFormEditorPage({
   const isNew = !params.id;
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("info");
+  const [editingForm, setEditingForm] = useState<RoutingForm>({
+    id: crypto.randomUUID(),
+    name: "",
+    description: "",
+    fields: [],
+    actions: [],
+    rules: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 
-  // For existing form, fetch it
-  const { data: existingForm } = trpc.viewer.routingForms.get.useQuery(
+  // For existing forms, fetch it
+  const { data: existingForm, isLoading } = trpc.viewer.routingForms.get.useQuery(
     { id: params.id || "" },
-    { enabled: !isNew, refetchOnWindowFocus: false }
+    {
+      enabled: !isNew,
+      refetchOnWindowFocus: false,
+      onSuccess: (data) => {
+        if (data) {
+          setEditingForm({
+            ...data,
+            createdAt: new Date(data.createdAt),
+            updatedAt: new Date(data.updatedAt),
+          });
+        }
+      },
+    }
   );
 
   const createMutation = trpc.viewer.routingForms.create.useMutation({
     onSuccess: (result) => {
-      showToast("Routing form created", "success");
+      showToast(`Routing form "${editingForm.name}" created`, "success");
       router.push(`/settings/routing-forms`);
     },
     onError: (err) => {
@@ -43,7 +69,7 @@ export default function RoutingFormEditorPage({
 
   const updateMutation = trpc.viewer.routingForms.update.useMutation({
     onSuccess: (result) => {
-      showToast("Routing form updated", "success");
+      showToast(`Routing form "${editingForm.name}" updated`, "success");
       router.push(`/settings/routing-forms`);
     },
     onError: (err) => {
@@ -51,7 +77,7 @@ export default function RoutingFormEditorPage({
     },
   });
 
-  if (!isNew && !existingForm) {
+  if (!isNew && isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Icon name="loader" className="text-subtle h-6 w-6 animate-spin" />
@@ -59,25 +85,37 @@ export default function RoutingFormEditorPage({
     );
   }
 
-  const form = existingForm || { id: "", name: "", description: "" };
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  const loadTemplate = (templateKey: keyof typeof ROUTING_FORM_TEMPLATES) => {
+    const template = ROUTING_FORM_TEMPLATES[templateKey];
+    setEditingForm({
+      ...editingForm,
+      name: template.name,
+      description: template.description,
+      fields: template.fields,
+      actions: template.actions,
+      rules: template.rules || [],
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const formToSubmit = {
+      name: editingForm.name,
+      description: editingForm.description,
+      fields: editingForm.fields,
+      actions: editingForm.actions,
+      rules: editingForm.rules,
+    };
+
     if (isNew) {
-      createMutation.mutate({
-        name: form.name,
-        description: form.description,
-        fields: [],
-        actions: [],
-        rules: [],
-      });
+      createMutation.mutate(formToSubmit as any);
     } else {
       updateMutation.mutate({
-        id: form.id,
-        name: form.name,
-        description: form.description,
+        id: editingForm.id,
+        ...formToSubmit,
       });
     }
   };
@@ -89,12 +127,35 @@ export default function RoutingFormEditorPage({
     { id: "rules", label: "Rules", icon: "git-branch" },
   ];
 
+  const saveDisabled = !editingForm.name.trim() || editingForm.fields.length === 0;
+
   return (
     <div className="flex h-full max-w-5xl flex-col">
       <Meta
-        title={isNew ? "New routing form" : form.name}
+        title={isNew ? "New routing form" : editingForm.name}
         description="Create and manage routing forms to direct bookings."
         borderInBottom
+        trailingAccessory={
+          !isPending && (
+            <div className="flex gap-2">
+              <Button
+                variant="minimal"
+                onClick={() => { /* Save as template feature */ }}
+                color="minimal">
+                Save as Template
+              </Button>
+              <div className="relative">
+                <Button
+                  variant="minimal"
+                  onClick={() => { /* Load template dropdown logic */ }}
+                  color="minimal">
+                  <Icon name="file-text" className="mr-2 h-4 w-4" />
+                  Load Template
+                </Button>
+              </div>
+            </div>
+          )
+        }
       />
 
       <div className="flex flex-1 flex-col gap-6 pt-6">
@@ -120,25 +181,45 @@ export default function RoutingFormEditorPage({
         {/* Tab content */}
         {activeTab === "info" && (
           <div className="max-w-2xl space-y-4">
-            <TextField label="Name" value={form.name} onChange={(e) => form.name = e.target.value} />
+            <TextField
+              label="Form Name"
+              value={editingForm.name}
+              onChange={(e) =>
+                setEditingForm({
+                  ...editingForm,
+                  name: e.target.value,
+                })
+              }
+              placeholder="Contact Form, Support Inquiry, etc."
+              required
+            />
 
             <TextAreaField
-              label="Description"
-              value={form.description}
-              onChange={(e) => form.description = e.target.value}
-              placeholder="Describe what this routing form collects and where it routes bookings..."
+              label="Description (optional)"
+              value={editingForm.description}
+              onChange={(e) =>
+                setEditingForm({
+                  ...editingForm,
+                  description: e.target.value,
+                })
+              }
+              placeholder="Describe what this form collects and how it routes bookings..."
               rows={4}
             />
           </div>
         )}
 
         {activeTab === "fields" && (
-          <div className="bg-muted border-subtle rounded-lg border p-8 text-center">
-            <Icon name="list" className="text-subtle mx-auto h-12 w-12" />
-            <h3 className="text-default mt-4 text-lg font-medium">Fields editor coming soon</h3>
-            <p className="text-subtle mt-2">
-              Add questions to collect information from bookers. Supports text, email, phone, dropdown, etc.
-            </p>
+          <div className="max-w-5xl">
+            <RoutingFormFieldEditor
+              fields={editingForm.fields}
+              onChange={(fields) =>
+                setEditingForm({
+                  ...editingForm,
+                  fields,
+                })
+              }
+            />
           </div>
         )}
 
@@ -167,8 +248,14 @@ export default function RoutingFormEditorPage({
           <Button variant="minimal" onClick={() => router.back()}>
             Cancel
           </Button>
-          <Button type="button" onClick={handleSubmit} loading={isPending} color="primary">
-            {isNew ? "Create routing form" : "Save changes"}
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            loading={isPending}
+            disabled={saveDisabled}
+            color="primary">
+            {saveDisabled && "Add at least one field to "}
+            {isNew ? "Create" : "Save"} Routing Form
           </Button>
         </div>
       </div>
